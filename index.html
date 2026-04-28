@@ -9,17 +9,19 @@
   https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css
   https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js</script>
 
-  <!-- Mapbox Geocoder plugin -->
+  <!-- Mapbox Geocoder plugin (loaded after GL, per Mapbox example) -->
   <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" type="text/css" />
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js"></script>
 
   <style>
     html, body { height: 100%; margin: 0; }
     #map { position: absolute; inset: 0; }
+
     .mapboxgl-popup-content {
       font: 13px/18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       max-width: 320px;
     }
+
     .mapboxgl-ctrl-geocoder { min-width: 260px; }
   </style>
 </head>
@@ -28,22 +30,13 @@
   <div id="map"></div>
 
   <script>
-    // Proof logs (keep while debugging)
-    console.log("typeof mapboxgl =", typeof mapboxgl);
-    console.log("typeof MapboxGeocoder =", typeof MapboxGeocoder);
-
-    // If mapboxgl didn't load, stop here so the page doesn't go blank
-    if (typeof mapboxgl === "undefined") {
-      console.error("Mapbox GL JS did not load. Check Network for mapbox-gl.js (status should be 200).");
-      throw new Error("mapboxgl missing");
-    }
-
+    // ===== CONFIG =====
     mapboxgl.accessToken = "pk.eyJ1Ijoic2lyZHVubmVycyIsImEiOiJjbW9ia3FkdDcwMmFoMndzNnp0NG8xZjVqIn0.b5r1Fek9EvNWvmBF1GQpOA";
-
     const STYLE_URL = "mapbox://styles/sirdunners/cmobl8jze002p01r15jkw739u";
     const STREET_LAYER_ID = "Introduction Leaflet";
     const HIGHLIGHT_LAYER_ID = "Street Highlight";
 
+    // ===== MAP INIT =====
     const map = new mapboxgl.Map({
       container: "map",
       style: STYLE_URL,
@@ -53,6 +46,7 @@
 
     map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
+    // ===== HELPERS =====
     function openPopupAt(lngLat, props) {
       const street = props["Street Name"] || props["name"] || "(street)";
       const status = props["Status"] || "";
@@ -85,18 +79,23 @@
       map.setFilter(HIGHLIGHT_LAYER_ID, ["==", ["get", "Street Name"], "__none__"]);
     }
 
+    // ===== MAIN LOAD =====
     map.on("load", () => {
+      // Debug checks (remove later)
+      console.log("typeof mapboxgl =", typeof mapboxgl);
+      console.log("typeof MapboxGeocoder =", typeof MapboxGeocoder);
+
       const hasStreetLayer = !!map.getLayer(STREET_LAYER_ID);
       if (!hasStreetLayer) {
         console.warn("Layer not found:", STREET_LAYER_ID);
         console.log("Available layer IDs:", map.getStyle().layers.map(l => l.id));
       }
 
-      // Highlight layer (only if streets layer exists)
+      // Add highlight layer (above streets layer)
       if (hasStreetLayer && !map.getLayer(HIGHLIGHT_LAYER_ID)) {
         const baseLayer = map.getLayer(STREET_LAYER_ID);
         const src = baseLayer.source;
-        const srcLayer = baseLayer["source-layer"]; // only present for vector tilesets
+        const srcLayer = baseLayer["source-layer"]; // only for vector tilesets
 
         const highlightLayerDef = {
           id: HIGHLIGHT_LAYER_ID,
@@ -104,17 +103,18 @@
           source: src,
           ...(srcLayer ? { "source-layer": srcLayer } : {}),
           paint: {
-            "line-color": "#00E5FF",
+            "line-color": "#00E5FF",  // bright cyan
             "line-width": 7,
             "line-opacity": 0.95
           },
-          filter: ["==", ["get", "Street Name"], "__none__"]
+          filter: ["==", ["get", "Street Name"], "__none__"] // hidden initially
         };
 
+        // Add above the base street layer
         map.addLayer(highlightLayerDef, STREET_LAYER_ID);
       }
 
-      // Click → highlight + popup
+      // Click -> highlight + popup
       if (hasStreetLayer) {
         map.on("click", STREET_LAYER_ID, (e) => {
           const f = e.features && e.features[0];
@@ -131,13 +131,12 @@
         map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
       }
 
-      // Geocoder must exist to show the search bar (per Mapbox example) [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
+      // Geocoder (search bar) - Mapbox usage pattern [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
       if (typeof MapboxGeocoder === "undefined") {
-        console.error("MapboxGeocoder did not load. Check Network for mapbox-gl-geocoder.min.js (status should be 200).");
+        console.error("MapboxGeocoder did not load (plugin script missing/blocked).");
         return;
       }
 
-      // Local-only street search (searches rendered street features)
       const geocoder = new MapboxGeocoder({
         accessToken: mapboxgl.accessToken,
         mapboxgl,
@@ -146,6 +145,7 @@
         localGeocoderOnly: true,
         localGeocoder: (query) => {
           if (!hasStreetLayer) return [];
+
           const features = map.queryRenderedFeatures({ layers: [STREET_LAYER_ID] });
           const seen = new Set();
 
@@ -175,6 +175,7 @@
       geocoder.on("result", (e) => {
         const p = e.result.properties || {};
         const center = e.result.center;
+
         setHighlightByStreetName(p["Street Name"] || "");
         openPopupAt(center, p);
       });
@@ -186,3 +187,4 @@
   </script>
 </body>
 </html>
+``
