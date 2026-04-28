@@ -6,19 +6,26 @@
   <title>Leaflets — interactive map</title>
 
   <!-- Mapbox GL -->
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css" />
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
+  <link rel="stylesheet" href="https://api.mapbox.comgl.css
+  <script src="https://api.mapbox.com/v3.21.0/mapbox-gl.js</script>
 
   <!-- Mapbox Geocoder -->
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" />
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" type="text/css">
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js"></script>
 
   <style>
     html, body { height: 100%; margin: 0; }
     #map { position: absolute; inset: 0; }
+
     .mapboxgl-popup-content {
       font: 13px/18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       max-width: 320px;
+    }
+
+    /* Optional: make geocoder a bit wider on desktop */
+    .mapboxgl-ctrl-geocoder {
+      min-width: 260px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
   </style>
 </head>
@@ -31,6 +38,7 @@
 
     const STYLE_URL = "mapbox://styles/sirdunners/cmobl8jze002p01r15jkw739u";
     const STREET_LAYER_ID = "Introduction Leaflet";
+    const HIGHLIGHT_LAYER_ID = "Street Highlight";
 
     const map = new mapboxgl.Map({
       container: "map",
@@ -41,55 +49,103 @@
 
     map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
+    function setHighlightByStreetName(streetName) {
+      if (!streetName) return;
+      if (!map.getLayer(HIGHLIGHT_LAYER_ID)) return;
+      map.setFilter(HIGHLIGHT_LAYER_ID, ["==", ["get", "Street Name"], streetName]);
+    }
+
+    function clearHighlight() {
+      if (!map.getLayer(HIGHLIGHT_LAYER_ID)) return;
+      map.setFilter(HIGHLIGHT_LAYER_ID, ["==", ["get", "Street Name"], "__none__"]);
+    }
+
+    function openPopupAt(lngLat, props) {
+      const street = props["Street Name"] || props["name"] || "(street)";
+      const status = props["Status"] || "";
+      const recency = props["Recency Traffic Light"] || "";
+      const ward = props["Ward"] || "";
+      const constituency = props["Constituency"] || "";
+
+      // Support both possible date fields
+      const lastDate =
+        props["Last Delivery Date (Display)"] ||
+        props["Last Delivery Date"] ||
+        "";
+
+      new mapboxgl.Popup()
+        .setLngLat(lngLat)
+        .setHTML(`
+          <strong>${street}</strong><br/>
+          Status: ${status}<br/>
+          Recency: ${recency}<br/>
+          Ward: ${ward}<br/>
+          Constituency: ${constituency}<br/>
+          Last delivery: ${lastDate}
+        `)
+        .addTo(map);
+    }
+
     map.on("load", () => {
-      // Quick sanity checks
-      console.log("mapboxgl:", typeof mapboxgl);           // should be "object"
-      console.log("MapboxGeocoder:", typeof MapboxGeocoder); // should be "function"
+      // Debug sanity checks (remove later if you like)
+      console.log("mapboxgl:", typeof mapboxgl);
+      console.log("MapboxGeocoder:", typeof MapboxGeocoder);
 
       const hasStreetLayer = !!map.getLayer(STREET_LAYER_ID);
+
       if (!hasStreetLayer) {
         console.warn("Layer not found:", STREET_LAYER_ID);
         console.log("Available layer IDs:", map.getStyle().layers.map(l => l.id));
       }
 
-      // Click popup (only if the layer exists)
+      // Add highlight layer above the street layer (if street layer exists)
+      if (hasStreetLayer && !map.getLayer(HIGHLIGHT_LAYER_ID)) {
+        const baseLayer = map.getLayer(STREET_LAYER_ID);
+        const src = baseLayer.source;
+        const srcLayer = baseLayer["source-layer"]; // only exists for vector tilesets
+
+        const highlightLayerDef = {
+          id: HIGHLIGHT_LAYER_ID,
+          type: "line",
+          source: src,
+          ...(srcLayer ? { "source-layer": srcLayer } : {}),
+          paint: {
+            // bright cyan = very visible + colour-blind friendly
+            "line-color": "#00E5FF",
+            "line-width": 7,
+            "line-opacity": 0.95
+          },
+          // start hidden
+          filter: ["==", ["get", "Street Name"], "__none__"]
+        };
+
+        // Add ABOVE the base street layer so it sits on top
+        map.addLayer(highlightLayerDef, STREET_LAYER_ID);
+      }
+
+      // Click popup + highlight
       if (hasStreetLayer) {
         map.on("click", STREET_LAYER_ID, (e) => {
           const f = e.features && e.features[0];
           if (!f) return;
 
           const p = f.properties || {};
-          const street = p["Street Name"] || p["name"] || "(street)";
-          const status = p["Status"] || "";
-          const recency = p["Recency Traffic Light"] || "";
-          const ward = p["Ward"] || "";
-          const constituency = p["Constituency"] || "";
-          const lastDate = p["Last Delivery Date (Display)"] || p["Last Delivery Date"] || "";
-
-          new mapboxgl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(`
-              <strong>${street}</strong><br/>
-              Status: ${status}<br/>
-              Recency: ${recency}<br/>
-              Ward: ${ward}<br/>
-              Constituency: ${constituency}<br/>
-              Last delivery: ${lastDate}
-            `)
-            .addTo(map);
+          const streetName = p["Street Name"] || p["name"] || "";
+          setHighlightByStreetName(streetName);
+          openPopupAt(e.lngLat, p);
         });
 
         map.on("mouseenter", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "pointer");
         map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
       }
 
-      // Don’t crash if geocoder didn’t load
+      // If geocoder isn't available, don't crash the map
       if (typeof MapboxGeocoder === "undefined") {
         console.error("MapboxGeocoder is undefined — geocoder plugin script did not load.");
         return;
       }
 
-      // Local-only street search
+      // Local-only street search (search within rendered street features)
       const geocoder = new MapboxGeocoder({
         accessToken: mapboxgl.accessToken,
         mapboxgl,
@@ -114,6 +170,7 @@
               type: "Feature",
               place_name: f.properties["Street Name"],
               properties: f.properties,
+              // choose a midpoint-ish coordinate for lines
               center:
                 f.geometry.type === "LineString"
                   ? f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)]
@@ -125,23 +182,22 @@
 
       map.addControl(geocoder, "top-left");
 
+      // When a search result is selected: highlight + popup
       geocoder.on("result", (e) => {
         const p = e.result.properties || {};
         const center = e.result.center;
 
-        new mapboxgl.Popup()
-          .setLngLat(center)
-          .setHTML(`
-            <strong>${p["Street Name"] || ""}</strong><br/>
-            Status: ${p["Status"] || ""}<br/>
-            Recency: ${p["Recency Traffic Light"] || ""}<br/>
-            Ward: ${p["Ward"] || ""}<br/>
-            Constituency: ${p["Constituency"] || ""}<br/>
-            Last delivery: ${p["Last Delivery Date (Display)"] || p["Last Delivery Date"] || ""}
-          `)
-          .addTo(map);
+        const streetName = p["Street Name"] || "";
+        setHighlightByStreetName(streetName);
+        openPopupAt(center, p);
+      });
+
+      // When the search box is cleared: remove highlight
+      geocoder.on("clear", () => {
+        clearHighlight();
       });
     });
   </script>
 </body>
 </html>
+``
