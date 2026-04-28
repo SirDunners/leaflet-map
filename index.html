@@ -6,11 +6,11 @@
   <title>Leaflets — interactive map</title>
 
   <!-- Mapbox GL -->
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css" />
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
+  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css
+  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js</script>
 
-  <!-- Mapbox Geocoder plugin -->
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" type="text/css" />
+  <!-- Mapbox Geocoder -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" />
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js"></script>
 
   <style>
@@ -19,10 +19,11 @@
 
     .mapboxgl-popup-content {
       font: 13px/18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      max-width: 320px;
+      max-width: 340px;
     }
 
-    .mapboxgl-ctrl-geocoder { min-width: 260px; }
+    /* Slightly wider search box */
+    .mapboxgl-ctrl-geocoder { min-width: 320px; }
   </style>
 </head>
 
@@ -32,9 +33,13 @@
   <script>
     // ===== CONFIG =====
     mapboxgl.accessToken = "pk.eyJ1Ijoic2lyZHVubmVycyIsImEiOiJjbW9ia3FkdDcwMmFoMndzNnp0NG8xZjVqIn0.b5r1Fek9EvNWvmBF1GQpOA";
+
     const STYLE_URL = "mapbox://styles/sirdunners/cmobl8jze002p01r15jkw739u";
-    const STREET_LAYER_ID = "Introduction Leaflet";   // must match the layer id in Mapbox Studio
-    const HIGHLIGHT_LAYER_ID = "Street Highlight";
+    const STREET_LAYER_ID = "Introduction Leaflet";
+
+    // Highlight layers (glow + core)
+    const HIGHLIGHT_GLOW_ID = "Street Highlight Glow";
+    const HIGHLIGHT_CORE_ID = "Street Highlight Core";
 
     // ===== MAP INIT =====
     const map = new mapboxgl.Map({
@@ -46,8 +51,38 @@
 
     map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
-    // ===== HELPERS =====
+    // Track popup so we can auto-clear highlight on close
+    let activePopup = null;
+
+    function closeActivePopup() {
+      if (activePopup) {
+        activePopup.remove();
+        activePopup = null;
+      }
+    }
+
+    function clearHighlight() {
+      if (map.getLayer(HIGHLIGHT_GLOW_ID)) {
+        map.setFilter(HIGHLIGHT_GLOW_ID, ["==", ["get", "Street Name"], "__none__"]);
+      }
+      if (map.getLayer(HIGHLIGHT_CORE_ID)) {
+        map.setFilter(HIGHLIGHT_CORE_ID, ["==", ["get", "Street Name"], "__none__"]);
+      }
+    }
+
+    function setHighlightByStreetName(streetName) {
+      if (!streetName) return;
+      if (map.getLayer(HIGHLIGHT_GLOW_ID)) {
+        map.setFilter(HIGHLIGHT_GLOW_ID, ["==", ["get", "Street Name"], streetName]);
+      }
+      if (map.getLayer(HIGHLIGHT_CORE_ID)) {
+        map.setFilter(HIGHLIGHT_CORE_ID, ["==", ["get", "Street Name"], streetName]);
+      }
+    }
+
     function openPopupAt(lngLat, props) {
+      closeActivePopup();
+
       const street = props["Street Name"] || props["name"] || "(street)";
       const status = props["Status"] || "";
       const recency = props["Recency Traffic Light"] || "";
@@ -55,7 +90,7 @@
       const constituency = props["Constituency"] || "";
       const lastDate = props["Last Delivery Date (Display)"] || props["Last Delivery Date"] || "";
 
-      new mapboxgl.Popup()
+      activePopup = new mapboxgl.Popup()
         .setLngLat(lngLat)
         .setHTML(`
           <strong>${street}</strong><br/>
@@ -66,22 +101,115 @@
           Last delivery: ${lastDate}
         `)
         .addTo(map);
+
+      // ✅ Auto-clear highlight when popup closes
+      activePopup.on("close", () => {
+        clearHighlight();
+        activePopup = null;
+      });
     }
 
-    function setHighlightByStreetName(streetName) {
-      if (!streetName) return;
-      if (!map.getLayer(HIGHLIGHT_LAYER_ID)) return;
-      map.setFilter(HIGHLIGHT_LAYER_ID, ["==", ["get", "Street Name"], streetName]);
+    // Compute bounds from a list of features (LineStrings)
+    function fitToFeatures(features, padding = 90) {
+      if (!features || !features.length) return;
+
+      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+
+      for (const f of features) {
+        const g = f.geometry;
+        if (!g) continue;
+
+        let coords = [];
+        if (g.type === "LineString") coords = g.coordinates;
+        else if (g.type === "MultiLineString") coords = g.coordinates.flat();
+        else continue;
+
+        for (const c of coords) {
+          const lng = c[0], lat = c[1];
+          if (lng < minLng) minLng = lng;
+          if (lat < minLat) minLat = lat;
+          if (lng > maxLng) maxLng = lng;
+          if (lat > maxLat) maxLat = lat;
+        }
+      }
+
+      if (!isFinite(minLng) || !isFinite(minLat) || !isFinite(maxLng) || !isFinite(maxLat)) return;
+
+      map.fitBounds([[minLng, minLat], [maxLng, maxLat]], {
+        padding,
+        duration: 650,
+        maxZoom: 17
+      });
     }
 
-    function clearHighlight() {
-      if (!map.getLayer(HIGHLIGHT_LAYER_ID)) return;
-      map.setFilter(HIGHLIGHT_LAYER_ID, ["==", ["get", "Street Name"], "__none__"]);
+    // Gather *all loaded* segments for a street name (best-effort)
+    function getLoadedStreetFeaturesByName(streetName, streetLayerId) {
+      if (!streetName) return [];
+
+      // Prefer querySourceFeatures (includes non-rendered in loaded tiles)
+      try {
+        const baseLayer = map.getLayer(streetLayerId);
+        if (baseLayer && baseLayer.source) {
+          const sourceId = baseLayer.source;
+          const sourceLayer = baseLayer["source-layer"]; // may be undefined for GeoJSON sources
+
+          const opts = sourceLayer ? { sourceLayer } : {};
+          const candidates = map.querySourceFeatures(sourceId, opts) || [];
+
+          return candidates.filter(f => (f.properties && f.properties["Street Name"] === streetName));
+        }
+      } catch (e) {
+        // fall back below
+      }
+
+      // Fallback: only rendered features currently visible
+      const rendered = map.queryRenderedFeatures({ layers: [streetLayerId] }) || [];
+      return rendered.filter(f => (f.properties && f.properties["Street Name"] === streetName));
     }
 
-    // ===== MAIN LOAD =====
+    function ensureHighlightLayers(streetLayerId) {
+      const baseLayer = map.getLayer(streetLayerId);
+      if (!baseLayer) return;
+
+      const src = baseLayer.source;
+      const srcLayer = baseLayer["source-layer"]; // only for vector tilesets
+      const hidden = ["==", ["get", "Street Name"], "__none__"];
+
+      // Glow (thick, translucent)
+      if (!map.getLayer(HIGHLIGHT_GLOW_ID)) {
+        map.addLayer({
+          id: HIGHLIGHT_GLOW_ID,
+          type: "line",
+          source: src,
+          ...(srcLayer ? { "source-layer": srcLayer } : {}),
+          paint: {
+            "line-color": "#FFD400",   // bright yellow glow for contrast
+            "line-width": 14,
+            "line-opacity": 0.25
+          },
+          filter: hidden
+        }, streetLayerId);
+      }
+
+      // Core (thin, bright)
+      if (!map.getLayer(HIGHLIGHT_CORE_ID)) {
+        map.addLayer({
+          id: HIGHLIGHT_CORE_ID,
+          type: "line",
+          source: src,
+          ...(srcLayer ? { "source-layer": srcLayer } : {}),
+          paint: {
+            "line-color": "#FFD400",
+            "line-width": 7,
+            "line-opacity": 0.95
+          },
+          filter: hidden
+        }, streetLayerId);
+      }
+    }
+
     map.on("load", () => {
-      // Debug proof (you can remove later)
+      // Debug proof (safe to remove later)
       console.log("typeof mapboxgl =", typeof mapboxgl);
       console.log("typeof MapboxGeocoder =", typeof MapboxGeocoder);
 
@@ -89,32 +217,11 @@
       if (!hasStreetLayer) {
         console.warn("Layer not found:", STREET_LAYER_ID);
         console.log("Available layer IDs:", map.getStyle().layers.map(l => l.id));
+      } else {
+        ensureHighlightLayers(STREET_LAYER_ID);
       }
 
-      // --- Highlight layer (above street layer) ---
-      if (hasStreetLayer && !map.getLayer(HIGHLIGHT_LAYER_ID)) {
-        const baseLayer = map.getLayer(STREET_LAYER_ID);
-        const src = baseLayer.source;
-        const srcLayer = baseLayer["source-layer"]; // only for vector tilesets
-
-        const highlightLayerDef = {
-          id: HIGHLIGHT_LAYER_ID,
-          type: "line",
-          source: src,
-          ...(srcLayer ? { "source-layer": srcLayer } : {}),
-          paint: {
-            "line-color": "#00E5FF",  // bright cyan (stands out, colour-blind friendly)
-            "line-width": 7,
-            "line-opacity": 0.95
-          },
-          filter: ["==", ["get", "Street Name"], "__none__"]
-        };
-
-        // Add above the base street layer
-        map.addLayer(highlightLayerDef, STREET_LAYER_ID);
-      }
-
-      // --- Click highlight + popup ---
+      // Click → highlight + fit bounds + popup
       if (hasStreetLayer) {
         map.on("click", STREET_LAYER_ID, (e) => {
           const f = e.features && e.features[0];
@@ -124,6 +231,11 @@
           const streetName = p["Street Name"] || p["name"] || "";
 
           setHighlightByStreetName(streetName);
+
+          // Fit to all loaded segments of that street name
+          const segments = getLoadedStreetFeaturesByName(streetName, STREET_LAYER_ID);
+          fitToFeatures(segments);
+
           openPopupAt(e.lngLat, p);
         });
 
@@ -131,7 +243,7 @@
         map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
       }
 
-      // --- Search bar (local-only) ---
+      // Search bar
       if (typeof MapboxGeocoder === "undefined") {
         console.error("MapboxGeocoder did not load (plugin script missing/blocked).");
         return;
@@ -143,45 +255,81 @@
         marker: false,
         placeholder: "Search for a street…",
         localGeocoderOnly: true,
+        minLength: 2,                 // improves UX (less noise)
         localGeocoder: (query) => {
           if (!hasStreetLayer) return [];
 
-          const features = map.queryRenderedFeatures({ layers: [STREET_LAYER_ID] });
-          const seen = new Set();
+          const q = (query || "").trim().toLowerCase();
+          if (!q) return [];
 
-          return features
-            .filter(f => f.properties && f.properties["Street Name"])
-            .filter(f => {
-              const name = f.properties["Street Name"];
-              if (seen.has(name)) return false;
-              seen.add(name);
-              return name.toLowerCase().includes(query.toLowerCase());
-            })
-            .map(f => ({
+          // Search loaded features for better coverage than just rendered
+          const loaded = map.queryRenderedFeatures({ layers: [STREET_LAYER_ID] }) || [];
+
+          const seen = new Set();
+          const results = [];
+
+          for (const f of loaded) {
+            const props = f.properties || {};
+            const street = (props["Street Name"] || "").trim();
+            if (!street) continue;
+
+            const ward = (props["Ward"] || "").trim();
+            const constituency = (props["Constituency"] || "").trim();
+
+            const key = `${street}||${ward}||${constituency}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            const streetLower = street.toLowerCase();
+            const idx = streetLower.indexOf(q);
+            if (idx === -1) continue;
+
+            // Score: starts-with first, then contains
+            const score = (idx === 0) ? 0 : 1;
+
+            const center =
+              f.geometry.type === "LineString"
+                ? f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)]
+                : f.geometry.coordinates;
+
+            results.push({
               type: "Feature",
-              place_name: f.properties["Street Name"],
-              properties: f.properties,
-              center:
-                f.geometry.type === "LineString"
-                  ? f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)]
-                  : f.geometry.coordinates
-            }));
+              place_name: `${street} (${ward}${ward && constituency ? ", " : ""}${constituency})`,
+              properties: props,
+              geometry: f.geometry,
+              center,
+              score,
+              sortName: streetLower
+            });
+          }
+
+          results.sort((a, b) => (a.score - b.score) || a.sortName.localeCompare(b.sortName));
+          return results;
         },
         zoom: 17
       });
 
       map.addControl(geocoder, "top-left");
 
+      // Search selection → highlight + fit + popup
       geocoder.on("result", (e) => {
-        const p = e.result.properties || {};
-        const center = e.result.center;
+        const p = (e.result && e.result.properties) ? e.result.properties : {};
+        const streetName = p["Street Name"] || "";
 
-        setHighlightByStreetName(p["Street Name"] || "");
-        openPopupAt(center, p);
+        setHighlightByStreetName(streetName);
+
+        // Fit to all loaded segments of the street name
+        const segments = getLoadedStreetFeaturesByName(streetName, STREET_LAYER_ID);
+        fitToFeatures(segments);
+
+        if (e.result && e.result.center) {
+          openPopupAt(e.result.center, p);
+        }
       });
 
       geocoder.on("clear", () => {
         clearHighlight();
+        closeActivePopup();
       });
     });
   </script>
