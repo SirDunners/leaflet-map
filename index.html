@@ -5,12 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Leaflets — interactive map</title>
 
+  <!-- Mapbox GL -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
 
+  <!-- Mapbox Geocoder -->
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.1/mapbox-gl-geocoder.css"
+    rel="stylesheet"
+  />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.1/mapbox-gl-geocoder.min.js"></script>
+
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { position: absolute; inset: 0; }
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+    }
+
     .mapboxgl-popup-content {
       font: 13px/18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       max-width: 320px;
@@ -21,7 +37,8 @@
   <div id="map"></div>
 
   <script>
-    mapboxgl.accessToken = "pk.eyJ1Ijoic2lyZHVubmVycyIsImEiOiJjbW9ia3FkdDcwMmFoMndzNnp0NG8xZjVqIn0.b5r1Fek9EvNWvmBF1GQpOA";
+    mapboxgl.accessToken =
+      "pk.eyJ1Ijoic2lyZHVubmVycyIsImEiOiJjbW9ia3FkdDcwMmFoMndzNnp0NG8xZjVqIn0.b5r1Fek9EvNWvmBF1GQpOA";
 
     const map = new mapboxgl.Map({
       container: "map",
@@ -30,15 +47,23 @@
       zoom: 11.13
     });
 
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+
     const STREET_LAYER_ID = "Introduction Leaflet";
 
     map.on("load", () => {
       if (!map.getLayer(STREET_LAYER_ID)) {
         console.warn("Layer not found:", STREET_LAYER_ID);
-        console.log("Available layer IDs:", map.getStyle().layers.map(l => l.id));
+        console.log(
+          "Available layer IDs:",
+          map.getStyle().layers.map(l => l.id)
+        );
         return;
       }
 
+      /* ---------------------------
+         Street click popup
+      ---------------------------- */
       map.on("click", STREET_LAYER_ID, (e) => {
         const f = e.features && e.features[0];
         if (!f) return;
@@ -49,7 +74,10 @@
         const recency = p["Recency Traffic Light"] || "";
         const ward = p["Ward"] || "";
         const constituency = p["Constituency"] || "";
-        const lastDate = p["Last Delivery Date (Display)"] || p["Last Delivery Date"] || "";
+        const lastDate =
+          p["Last Delivery Date (Display)"] ||
+          p["Last Delivery Date"] ||
+          "";
 
         new mapboxgl.Popup()
           .setLngLat(e.lngLat)
@@ -64,10 +92,68 @@
           .addTo(map);
       });
 
-      map.on("mouseenter", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "pointer");
-      map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
+      map.on("mouseenter", STREET_LAYER_ID, () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+
+      map.on("mouseleave", STREET_LAYER_ID, () => {
+        map.getCanvas().style.cursor = "";
+      });
+
+      /* ---------------------------
+         Local street search
+      ---------------------------- */
+      const geocoder = new MapboxGeocoder({
+        accessToken: mapboxgl.accessToken,
+        mapboxgl: mapboxgl,
+        marker: false,
+        placeholder: "Search for a street…",
+        localGeocoder: (query) => {
+          const features = map.queryRenderedFeatures({
+            layers: [STREET_LAYER_ID]
+          });
+
+          const seen = new Set();
+          return features
+            .filter(f => f.properties && f.properties["Street Name"])
+            .filter(f => {
+              const name = f.properties["Street Name"];
+              if (seen.has(name)) return false;
+              seen.add(name);
+              return name.toLowerCase().includes(query.toLowerCase());
+            })
+            .map(f => ({
+              type: "Feature",
+              geometry: f.geometry,
+              place_name: f.properties["Street Name"],
+              properties: f.properties,
+              center: f.geometry.type === "LineString"
+                ? f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)]
+                : f.geometry.coordinates
+            }));
+        },
+        zoom: 17
+      });
+
+      map.addControl(geocoder, "top-left");
+
+      geocoder.on("result", (e) => {
+        const p = e.result.properties || {};
+        const center = e.result.center;
+
+        new mapboxgl.Popup()
+          .setLngLat(center)
+          .setHTML(`
+            <strong>${p["Street Name"] || ""}</strong><br/>
+            Status: ${p["Overall Status"] || ""}<br/>
+            Recency: ${p["Recency Traffic Light"] || ""}<br/>
+            Ward: ${p["Ward"] || ""}<br/>
+            Constituency: ${p["Constituency"] || ""}<br/>
+            Last delivery: ${p["Last Delivery Date (Display)"] || p["Last Delivery Date"] || ""}
+          `)
+          .addTo(map);
+      });
     });
   </script>
 </body>
 </html>
-``
