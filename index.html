@@ -18,58 +18,56 @@
   </style>
 </head>
 <body>
-<div id="map"></div>
+  <div id="map"></div>
 
-<script>
-  mapboxgl.accessToken = "pk.eyJ1Ijoic2lyZHVubmVycyIsImEiOiJjbW9ia3FkdDcwMmFoMndzNnp0NG8xZjVqIn0.b5r1Fek9EvNWvmBF1GQpOA";
+  <script>
+    mapboxgl.accessToken = "pk.eyJ1Ijoic2lyZHVubmVycyIsImEiOiJjbW9ia3FkdDcwMmFoMndzNnp0NG8xZjVqIn0.b5r1Fek9EvNWvmBF1GQpOA";
 
-  const map = new mapboxgl.Map({
-    container: "map",
-    style: "mapbox://styles/sirdunners/cmobl8jze002p01r15jkw739u",
-    center: [-1.7211, 51.5718],
-    zoom: 11.13
-  });
-
-  // ✅ TODO: set this to the EXACT layer id of your leaflet streets layer in the style
-  const STREET_LAYER_ID = "Introduction Leaflet";
-
-  map.on("load", () => {
-    // If the layer id is wrong, print all layer ids to the console so you can pick the right one
-    if (!map.getLayer(STREET_LAYER_ID)) {
-      console.warn("Layer not found:", STREET_LAYER_ID);
-      console.log("Available layer IDs:", map.getStyle().layers.map(l => l.id));
-      return;
-    }
-
-    // Click → popup (standard Mapbox GL JS approach) [2](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
-    map.on("click", STREET_LAYER_ID, (e) => {
-      const f = e.features && e.features[0];
-      if (!f) return;
-
-      const p = f.properties || {};
-      const street = p["Street Name"] || p["name"] || "(street)";
-      const status = p["Overall Status"] || "";
-      const recency = p["Recency Traffic Light"] || "";
-      const ward = p["Ward"] || "";
-      const constituency = p["Constituency"] || "";
-      const lastDate = p["Last Delivery Date (Display)"] || p["Last Delivery Date"] || "";
-
-      new mapboxgl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(`
-          <strong>${street}</strong><br/>
-          Status: ${status}<br/>
-          Recency: ${recency}<br/>
-          Ward: ${ward}<br/>
-          Constituency: ${constituency}<br/>
-          Last delivery: ${lastDate}
-        `)
-        .addTo(map);
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/sirdunners/cmobl8jze002p01r15jkw739u",
+      center: [-1.7211, 51.5718],
+      zoom: 11.13
     });
 
-    map.on("mouseenter", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "pointer");
-    map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
-  });
-</script>
+    const STREET_LAYER_ID = "Introduction Leaflet";
+
+    map.on("load", () => {
+      if (!map.getLayer(STREET_LAYER_ID)) {
+        console.warn("Layer not found:", STREET_LAYER_ID);
+        console.log("Available layer IDs:", map.getStyle().layers.map(l => l.id));
+        return;
+      }
+
+      map.on("click", STREET_LAYER_ID, (e) => {
+        const f = e.features && e.features[0];
+        if (!f) return;
+
+        const p = f.properties || {};
+        const street = p["Street Name"] || p["name"] || "(street)";
+        const status = p["Overall Status"] || "";
+        const recency = p["Recency Traffic Light"] || "";
+        const ward = p["Ward"] || "";
+        const constituency = p["Constituency"] || "";
+        const lastDate = p["Last Delivery Date (Display)"] || p["Last Delivery Date"] || "";
+
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <strong>${street}</strong><br/>
+            Status: ${status}<br/>
+            Recency: ${recency}<br/>
+            Ward: ${ward}<br/>
+            Constituency: ${constituency}<br/>
+            Last delivery: ${lastDate}
+          `)
+          .addTo(map);
+      });
+
+      map.on("mouseenter", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "pointer");
+      map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
+    });
+  </script>
 </body>
 </html>
+``
