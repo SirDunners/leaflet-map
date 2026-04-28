@@ -56,64 +56,70 @@
     const STREET_LAYER_ID = "Introduction Leaflet";
 
     map.on("load", () => {
-      if (!map.getLayer(STREET_LAYER_ID)) {
+
+      const hasStreetLayer = !!map.getLayer(STREET_LAYER_ID);
+
+      if (!hasStreetLayer) {
         console.warn("Layer not found:", STREET_LAYER_ID);
         console.log(
           "Available layer IDs:",
           map.getStyle().layers.map(l => l.id)
         );
-        return;
       }
 
       /* ---------------------------
-         Street click popup
+         Street popups (only if layer exists)
       ---------------------------- */
-      map.on("click", STREET_LAYER_ID, (e) => {
-        const f = e.features && e.features[0];
-        if (!f) return;
+      if (hasStreetLayer) {
+        map.on("click", STREET_LAYER_ID, (e) => {
+          const f = e.features && e.features[0];
+          if (!f) return;
 
-        const p = f.properties || {};
-        const street = p["Street Name"] || p["name"] || "(street)";
-        const status = p["Status"] || "";
-        const recency = p["Recency Traffic Light"] || "";
-        const ward = p["Ward"] || "";
-        const constituency = p["Constituency"] || "";
-        const lastDate =
-          p["Last Delivery Date (Display)"] ||
-          p["Last Delivery Date"] ||
-          "";
+          const p = f.properties || {};
+          const street = p["Street Name"] || "(street)";
+          const status = p["Status"] || "";
+          const recency = p["Recency Traffic Light"] || "";
+          const ward = p["Ward"] || "";
+          const constituency = p["Constituency"] || "";
+          const lastDate =
+            p["Last Delivery Date (Display)"] ||
+            p["Last Delivery Date"] ||
+            "";
 
-        new mapboxgl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(`
-            <strong>${street}</strong><br/>
-            Status: ${status}<br/>
-            Recency: ${recency}<br/>
-            Ward: ${ward}<br/>
-            Constituency: ${constituency}<br/>
-            Last delivery: ${lastDate}
-          `)
-          .addTo(map);
-      });
+          new mapboxgl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(`
+              <strong>${street}</strong><br/>
+              Status: ${status}<br/>
+              Recency: ${recency}<br/>
+              Ward: ${ward}<br/>
+              Constituency: ${constituency}<br/>
+              Last delivery: ${lastDate}
+            `)
+            .addTo(map);
+        });
 
-      map.on("mouseenter", STREET_LAYER_ID, () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
+        map.on("mouseenter", STREET_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
 
-      map.on("mouseleave", STREET_LAYER_ID, () => {
-        map.getCanvas().style.cursor = "";
-      });
+        map.on("mouseleave", STREET_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      }
 
       /* ---------------------------
-         Local street search bar
+         ✅ LOCAL STREET SEARCH
       ---------------------------- */
       const geocoder = new MapboxGeocoder({
         accessToken: mapboxgl.accessToken,
-        mapboxgl: mapboxgl,
+        mapboxgl,
         marker: false,
         placeholder: "Search for a street…",
-        localGeocoderOnly: true,   // ✅ critical flag
+        localGeocoderOnly: true,
         localGeocoder: (query) => {
+          if (!hasStreetLayer) return [];
+
           const features = map.queryRenderedFeatures({
             layers: [STREET_LAYER_ID]
           });
