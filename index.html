@@ -1,6 +1,6 @@
+current live code:
 <!doctype html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,31 +8,35 @@
 
   <!-- Mapbox GL -->
   <link
-    rel="stylesheet"
     href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css"
- apbox-gl-js/v3.21.0/mapbox-glapbox Geocoder -->
-  <link
     rel="stylesheet"
-    href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.1/mapbox-gl-geocoderx.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.1/mapbox-gl.js</script>
+  />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
+
+  <!-- Mapbox Geocoder -->
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.1/mapbox-gl-geocoder.css"
+    rel="stylesheet"
+  />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.1/mapbox-gl-geocoder.min.js"></script>
 
   <style>
     html, body {
       height: 100%;
       margin: 0;
     }
+
     #map {
       position: absolute;
       inset: 0;
     }
+
     .mapboxgl-popup-content {
-      font: 13px/18px system-ui, -apple-system,
-            Segoe UI, Roboto, Arial, sans-serif;
+      font: 13px/18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       max-width: 320px;
     }
   </style>
 </head>
-
-
 
 <body>
   <div id="map"></div>
@@ -53,70 +57,64 @@
     const STREET_LAYER_ID = "Introduction Leaflet";
 
     map.on("load", () => {
-
-      const hasStreetLayer = !!map.getLayer(STREET_LAYER_ID);
-
-      if (!hasStreetLayer) {
+      if (!map.getLayer(STREET_LAYER_ID)) {
         console.warn("Layer not found:", STREET_LAYER_ID);
         console.log(
           "Available layer IDs:",
           map.getStyle().layers.map(l => l.id)
         );
+        return;
       }
 
       /* ---------------------------
-         Street popups (only if layer exists)
+         Street click popup
       ---------------------------- */
-      if (hasStreetLayer) {
-        map.on("click", STREET_LAYER_ID, (e) => {
-          const f = e.features && e.features[0];
-          if (!f) return;
+      map.on("click", STREET_LAYER_ID, (e) => {
+        const f = e.features && e.features[0];
+        if (!f) return;
 
-          const p = f.properties || {};
-          const street = p["Street Name"] || "(street)";
-          const status = p["Status"] || "";
-          const recency = p["Recency Traffic Light"] || "";
-          const ward = p["Ward"] || "";
-          const constituency = p["Constituency"] || "";
-          const lastDate =
-            p["Last Delivery Date (Display)"] ||
-            p["Last Delivery Date"] ||
-            "";
+        const p = f.properties || {};
+        const street = p["Street Name"] || p["name"] || "(street)";
+        const status = p["Status"] || "";
+        const recency = p["Recency Traffic Light"] || "";
+        const ward = p["Ward"] || "";
+        const constituency = p["Constituency"] || "";
+        const lastDate =
+          p["Last Delivery Date (Display)"] ||
+          p["Last Delivery Date"] ||
+          "";
 
-          new mapboxgl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(`
-              <strong>${street}</strong><br/>
-              Status: ${status}<br/>
-              Recency: ${recency}<br/>
-              Ward: ${ward}<br/>
-              Constituency: ${constituency}<br/>
-              Last delivery: ${lastDate}
-            `)
-            .addTo(map);
-        });
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <strong>${street}</strong><br/>
+            Status: ${status}<br/>
+            Recency: ${recency}<br/>
+            Ward: ${ward}<br/>
+            Constituency: ${constituency}<br/>
+            Last delivery: ${lastDate}
+          `)
+          .addTo(map);
+      });
 
-        map.on("mouseenter", STREET_LAYER_ID, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
+      map.on("mouseenter", STREET_LAYER_ID, () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
 
-        map.on("mouseleave", STREET_LAYER_ID, () => {
-          map.getCanvas().style.cursor = "";
-        });
-      }
+      map.on("mouseleave", STREET_LAYER_ID, () => {
+        map.getCanvas().style.cursor = "";
+      });
 
       /* ---------------------------
-         ✅ LOCAL STREET SEARCH
+         Local street search bar
       ---------------------------- */
       const geocoder = new MapboxGeocoder({
         accessToken: mapboxgl.accessToken,
-        mapboxgl,
+        mapboxgl: mapboxgl,
         marker: false,
         placeholder: "Search for a street…",
-        localGeocoderOnly: true,
+        localGeocoderOnly: true,   // ✅ critical flag
         localGeocoder: (query) => {
-          if (!hasStreetLayer) return [];
-
           const features = map.queryRenderedFeatures({
             layers: [STREET_LAYER_ID]
           });
