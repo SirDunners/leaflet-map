@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Leaflets — interactive map</title>
 
-  <!-- Mapbox GL (must load for mapboxgl to exist) -->
-  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css
-  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js</script>
+  <!-- Mapbox GL -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
 
-  <!-- Mapbox Geocoder plugin (loaded after GL, per Mapbox example) -->
+  <!-- Mapbox Geocoder plugin -->
   <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" type="text/css" />
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js"></script>
 
@@ -33,7 +33,7 @@
     // ===== CONFIG =====
     mapboxgl.accessToken = "pk.eyJ1Ijoic2lyZHVubmVycyIsImEiOiJjbW9ia3FkdDcwMmFoMndzNnp0NG8xZjVqIn0.b5r1Fek9EvNWvmBF1GQpOA";
     const STYLE_URL = "mapbox://styles/sirdunners/cmobl8jze002p01r15jkw739u";
-    const STREET_LAYER_ID = "Introduction Leaflet";
+    const STREET_LAYER_ID = "Introduction Leaflet";   // must match the layer id in Mapbox Studio
     const HIGHLIGHT_LAYER_ID = "Street Highlight";
 
     // ===== MAP INIT =====
@@ -81,7 +81,7 @@
 
     // ===== MAIN LOAD =====
     map.on("load", () => {
-      // Debug checks (remove later)
+      // Debug proof (you can remove later)
       console.log("typeof mapboxgl =", typeof mapboxgl);
       console.log("typeof MapboxGeocoder =", typeof MapboxGeocoder);
 
@@ -91,7 +91,7 @@
         console.log("Available layer IDs:", map.getStyle().layers.map(l => l.id));
       }
 
-      // Add highlight layer (above streets layer)
+      // --- Highlight layer (above street layer) ---
       if (hasStreetLayer && !map.getLayer(HIGHLIGHT_LAYER_ID)) {
         const baseLayer = map.getLayer(STREET_LAYER_ID);
         const src = baseLayer.source;
@@ -103,18 +103,18 @@
           source: src,
           ...(srcLayer ? { "source-layer": srcLayer } : {}),
           paint: {
-            "line-color": "#00E5FF",  // bright cyan
+            "line-color": "#00E5FF",  // bright cyan (stands out, colour-blind friendly)
             "line-width": 7,
             "line-opacity": 0.95
           },
-          filter: ["==", ["get", "Street Name"], "__none__"] // hidden initially
+          filter: ["==", ["get", "Street Name"], "__none__"]
         };
 
         // Add above the base street layer
         map.addLayer(highlightLayerDef, STREET_LAYER_ID);
       }
 
-      // Click -> highlight + popup
+      // --- Click highlight + popup ---
       if (hasStreetLayer) {
         map.on("click", STREET_LAYER_ID, (e) => {
           const f = e.features && e.features[0];
@@ -131,7 +131,7 @@
         map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
       }
 
-      // Geocoder (search bar) - Mapbox usage pattern [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
+      // --- Search bar (local-only) ---
       if (typeof MapboxGeocoder === "undefined") {
         console.error("MapboxGeocoder did not load (plugin script missing/blocked).");
         return;
@@ -187,4 +187,3 @@
   </script>
 </body>
 </html>
-``
