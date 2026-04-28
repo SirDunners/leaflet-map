@@ -6,8 +6,8 @@
   <title>Leaflets — interactive map</title>
 
   <!-- Mapbox GL -->
-  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css
-  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js</script>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
 
   <!-- Mapbox Geocoder -->
   <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" />
@@ -42,9 +42,9 @@
     map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
     map.on("load", () => {
-      // Debug: prove libraries loaded
-      console.log("mapboxgl:", typeof mapboxgl);
-      console.log("MapboxGeocoder:", typeof MapboxGeocoder);
+      // Quick sanity checks
+      console.log("mapboxgl:", typeof mapboxgl);           // should be "object"
+      console.log("MapboxGeocoder:", typeof MapboxGeocoder); // should be "function"
 
       const hasStreetLayer = !!map.getLayer(STREET_LAYER_ID);
       if (!hasStreetLayer) {
@@ -83,13 +83,13 @@
         map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
       }
 
-      // If geocoder failed to load, don't crash the map
+      // Don’t crash if geocoder didn’t load
       if (typeof MapboxGeocoder === "undefined") {
         console.error("MapboxGeocoder is undefined — geocoder plugin script did not load.");
         return;
       }
 
-      // Local-only street search (uses rendered street features)
+      // Local-only street search
       const geocoder = new MapboxGeocoder({
         accessToken: mapboxgl.accessToken,
         mapboxgl,
@@ -100,8 +100,8 @@
           if (!hasStreetLayer) return [];
 
           const features = map.queryRenderedFeatures({ layers: [STREET_LAYER_ID] });
-
           const seen = new Set();
+
           return features
             .filter(f => f.properties && f.properties["Street Name"])
             .filter(f => {
