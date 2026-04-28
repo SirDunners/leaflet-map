@@ -6,7 +6,10 @@
   <title>Leaflets — interactive map</title>
 
   <!-- Mapbox GL -->
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css" rel="stylesheet" />
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css"
+    rel="stylesheet"
+  />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
 
   <!-- Mapbox Geocoder -->
@@ -33,6 +36,7 @@
     }
   </style>
 </head>
+
 <body>
   <div id="map"></div>
 
@@ -101,13 +105,14 @@
       });
 
       /* ---------------------------
-         Local street search
+         Local street search bar
       ---------------------------- */
       const geocoder = new MapboxGeocoder({
         accessToken: mapboxgl.accessToken,
         mapboxgl: mapboxgl,
         marker: false,
         placeholder: "Search for a street…",
+        localGeocoderOnly: true,   // ✅ critical flag
         localGeocoder: (query) => {
           const features = map.queryRenderedFeatures({
             layers: [STREET_LAYER_ID]
@@ -124,12 +129,14 @@
             })
             .map(f => ({
               type: "Feature",
-              geometry: f.geometry,
               place_name: f.properties["Street Name"],
               properties: f.properties,
-              center: f.geometry.type === "LineString"
-                ? f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)]
-                : f.geometry.coordinates
+              center:
+                f.geometry.type === "LineString"
+                  ? f.geometry.coordinates[
+                      Math.floor(f.geometry.coordinates.length / 2)
+                    ]
+                  : f.geometry.coordinates
             }));
         },
         zoom: 17
@@ -145,7 +152,7 @@
           .setLngLat(center)
           .setHTML(`
             <strong>${p["Street Name"] || ""}</strong><br/>
-            Status: ${p["Overall Status"] || ""}<br/>
+            Status: ${p["Status"] || ""}<br/>
             Recency: ${p["Recency Traffic Light"] || ""}<br/>
             Ward: ${p["Ward"] || ""}<br/>
             Constituency: ${p["Constituency"] || ""}<br/>
