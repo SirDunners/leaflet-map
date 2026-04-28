@@ -1,23 +1,17 @@
 <!doctype html>
 <html lang="en">
-
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Leaflets — interactive map</title>
 
+  <!-- Mapbox GL JS (must be real tags, not bare URLs) -->
+  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css
+  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js</script>
 
-<!-- Mapbox GL (must load for mapboxgl to exist) -->
-https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css
-https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.jsscript>
-
-
-
-<!-- Mapbox Geocoder plugin -->
-https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css
-https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.jsscript>
-
+  <!-- Mapbox Geocoder plugin (load like Mapbox docs) -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" type="text/css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js"></script>
 
   <style>
     html, body { height: 100%; margin: 0; }
@@ -25,14 +19,12 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
 
     .mapboxgl-popup-content {
       font: 13px/18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      max-width: 320px;
+      max-width: 340px;
     }
 
-    .mapboxgl-ctrl-geocoder { min-width: 260px; }
+    .mapboxgl-ctrl-geocoder { min-width: 320px; }
   </style>
 </head>
-
-
 
 <body>
   <div id="map"></div>
@@ -116,7 +108,7 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
       });
     }
 
-    // Compute bounds from a list of features (LineStrings)
+    // Fit to bounds of multiple features (best-effort for multi-segment streets)
     function fitToFeatures(features, padding = 90) {
       if (!features || !features.length) return;
 
@@ -149,29 +141,25 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
       });
     }
 
-    // Gather *all loaded* segments for a street name (best-effort)
+    // Get all loaded segments with same Street Name (uses source features if possible)
     function getLoadedStreetFeaturesByName(streetName, streetLayerId) {
       if (!streetName) return [];
 
-      // Prefer querySourceFeatures (includes non-rendered in loaded tiles)
+      // Prefer querySourceFeatures (includes non-rendered but loaded tiles)
       try {
         const baseLayer = map.getLayer(streetLayerId);
         if (baseLayer && baseLayer.source) {
           const sourceId = baseLayer.source;
-          const sourceLayer = baseLayer["source-layer"]; // may be undefined for GeoJSON sources
-
+          const sourceLayer = baseLayer["source-layer"];
           const opts = sourceLayer ? { sourceLayer } : {};
           const candidates = map.querySourceFeatures(sourceId, opts) || [];
-
-          return candidates.filter(f => (f.properties && f.properties["Street Name"] === streetName));
+          return candidates.filter(f => f.properties && f.properties["Street Name"] === streetName);
         }
-      } catch (e) {
-        // fall back below
-      }
+      } catch (e) {}
 
-      // Fallback: only rendered features currently visible
+      // Fallback: rendered only
       const rendered = map.queryRenderedFeatures({ layers: [streetLayerId] }) || [];
-      return rendered.filter(f => (f.properties && f.properties["Street Name"] === streetName));
+      return rendered.filter(f => f.properties && f.properties["Street Name"] === streetName);
     }
 
     function ensureHighlightLayers(streetLayerId) {
@@ -179,7 +167,7 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
       if (!baseLayer) return;
 
       const src = baseLayer.source;
-      const srcLayer = baseLayer["source-layer"]; // only for vector tilesets
+      const srcLayer = baseLayer["source-layer"];
       const hidden = ["==", ["get", "Street Name"], "__none__"];
 
       // Glow (thick, translucent)
@@ -190,7 +178,7 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
           source: src,
           ...(srcLayer ? { "source-layer": srcLayer } : {}),
           paint: {
-            "line-color": "#FFD400",   // bright yellow glow for contrast
+            "line-color": "#FFD400",
             "line-width": 14,
             "line-opacity": 0.25
           },
@@ -216,7 +204,7 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
     }
 
     map.on("load", () => {
-      // Debug proof (safe to remove later)
+      // Proof: both libs should exist if the <head> is correct (Mapbox documented include pattern). [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
       console.log("typeof mapboxgl =", typeof mapboxgl);
       console.log("typeof MapboxGeocoder =", typeof MapboxGeocoder);
 
@@ -239,7 +227,6 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
 
           setHighlightByStreetName(streetName);
 
-          // Fit to all loaded segments of that street name
           const segments = getLoadedStreetFeaturesByName(streetName, STREET_LAYER_ID);
           fitToFeatures(segments);
 
@@ -250,7 +237,7 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
         map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
       }
 
-      // Search bar
+      // Search bar (local-only). Adding MapboxGeocoder as a control is the standard approach. [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
       if (typeof MapboxGeocoder === "undefined") {
         console.error("MapboxGeocoder did not load (plugin script missing/blocked).");
         return;
@@ -262,16 +249,15 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
         marker: false,
         placeholder: "Search for a street…",
         localGeocoderOnly: true,
-        minLength: 2,                 // improves UX (less noise)
+        minLength: 2,
+
+        // Better search: starts-with first, show Ward/Constituency in dropdown
         localGeocoder: (query) => {
           if (!hasStreetLayer) return [];
-
           const q = (query || "").trim().toLowerCase();
           if (!q) return [];
 
-          // Search loaded features for better coverage than just rendered
           const loaded = map.queryRenderedFeatures({ layers: [STREET_LAYER_ID] }) || [];
-
           const seen = new Set();
           const results = [];
 
@@ -291,7 +277,6 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
             const idx = streetLower.indexOf(q);
             if (idx === -1) continue;
 
-            // Score: starts-with first, then contains
             const score = (idx === 0) ? 0 : 1;
 
             const center =
@@ -318,14 +303,12 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
 
       map.addControl(geocoder, "top-left");
 
-      // Search selection → highlight + fit + popup
       geocoder.on("result", (e) => {
         const p = (e.result && e.result.properties) ? e.result.properties : {};
         const streetName = p["Street Name"] || "";
 
         setHighlightByStreetName(streetName);
 
-        // Fit to all loaded segments of the street name
         const segments = getLoadedStreetFeaturesByName(streetName, STREET_LAYER_ID);
         fitToFeatures(segments);
 
@@ -342,3 +325,4 @@ https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-
   </script>
 </body>
 </html>
+``
