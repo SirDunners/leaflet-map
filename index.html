@@ -226,6 +226,20 @@
     }
 
     map.on("load", () => {
+    
+  // Option B: Fit initial view to the full operating bounds (instant, no animation)
+  const isMobile = window.matchMedia("(max-width: 480px)").matches;
+
+  map.fitBounds(
+    [[-1.8660704, 51.4706445], [-1.6121243, 51.6669757]],
+    {
+      padding: isMobile ? 20 : 40,
+      duration: 0,
+      maxZoom: isMobile ? 12.2 : 12.6
+    }
+  );
+
+      
       // Proof: both libs should exist if the <head> is correct (Mapbox documented include pattern). [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
       console.log("typeof mapboxgl =", typeof mapboxgl);
       console.log("typeof MapboxGeocoder =", typeof MapboxGeocoder);
