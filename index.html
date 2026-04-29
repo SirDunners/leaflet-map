@@ -5,18 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Leaflets — interactive map</title>
 
-
-
-<!-- Mapbox GL JS -->
-<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css" />
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js"></script>
-
-
-
-<!-- Geocoder Plugin -->
-<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" type="text/css">
-<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js"></script>
-
+  <!-- Mapbox GL JS -->
+  https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.css
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.21.0/mapbox-gl.js<!-- Geocoder Plugin -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css" type="text/css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js"></script>
 
   <style>
     html, body { height: 100%; margin: 0; }
@@ -84,6 +77,40 @@
       }
     }
 
+    // ===== DATE FORMATTER: outputs DD/MM/YYYY =====
+    function formatDateDDMMYYYY(value) {
+      if (value === null || value === undefined) return "";
+
+      const s0 = String(value).trim();
+      if (!s0) return "";
+
+      // If it's a non-date phrase like "Not Applicable", keep it
+      if (!/\d/.test(s0)) return s0;
+
+      // Common case: "DD/MM/YYYY 00:00" or "DD/MM/YYYY HH:MM"
+      // Strip any time part after a space
+      const s = s0.includes(" ") ? s0.split(" ")[0] : s0;
+
+      // ISO case: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SSZ"
+      const iso = s.includes("T") ? s.split("T")[0] : s;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+        const [yyyy, mm, dd] = iso.split("-");
+        return `${dd}/${mm}/${yyyy}`;
+      }
+
+      // UK case already: "DD/MM/YYYY"
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+
+      // UK short case: "DD-MM-YYYY" -> convert
+      if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+        const [dd, mm, yyyy] = s.split("-");
+        return `${dd}/${mm}/${yyyy}`;
+      }
+
+      // Fall back: return what we have (better than blank)
+      return s;
+    }
+
     function openPopupAt(lngLat, props) {
       closeActivePopup();
 
@@ -92,7 +119,13 @@
       const recency = props["Recency Traffic Light"] || "";
       const ward = props["Ward"] || "";
       const constituency = props["Constituency"] || "";
-      const lastDate = props["Last Delivery Date (Display)"] || props["Last Delivery Date"] || "";
+
+      const lastDateRaw =
+        props["Last Delivery Date (Display)"] ||
+        props["Last Delivery Date"] ||
+        "";
+
+      const lastDate = formatDateDDMMYYYY(lastDateRaw);
 
       activePopup = new mapboxgl.Popup()
         .setLngLat(lngLat)
@@ -209,7 +242,7 @@
     }
 
     map.on("load", () => {
-      // Proof: both libs should exist if the <head> is correct (Mapbox documented include pattern). [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
+      // Debug proof (safe to remove later)
       console.log("typeof mapboxgl =", typeof mapboxgl);
       console.log("typeof MapboxGeocoder =", typeof MapboxGeocoder);
 
@@ -242,7 +275,7 @@
         map.on("mouseleave", STREET_LAYER_ID, () => map.getCanvas().style.cursor = "");
       }
 
-      // Search bar (local-only). Adding MapboxGeocoder as a control is the standard approach. [1](https://stackoverflow.com/questions/54322892/mapbox-adding-popup-event-to-a-layer)
+      // Search bar
       if (typeof MapboxGeocoder === "undefined") {
         console.error("MapboxGeocoder did not load (plugin script missing/blocked).");
         return;
