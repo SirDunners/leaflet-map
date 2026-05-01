@@ -113,6 +113,7 @@
       const ward = props["Ward"] || "";
       const constituency = props["Constituency"] || "";
       const lastDate = props["Last Delivery Date (Display)"] || props["Last Delivery Date"] || "";
+      const latestNotes = props["Latest Notes"] || "";
 
       activePopup = new mapboxgl.Popup()
         .setLngLat(lngLat)
@@ -123,6 +124,7 @@
           Ward: ${ward}<br/>
           Constituency: ${constituency}<br/>
           Last delivery: ${lastDate}
+          ${latestNotes ? `<br/><br/><strong>Latest Note:</strong><br/>${latestNotes}` : ``}
         `)
         .addTo(map);
 
